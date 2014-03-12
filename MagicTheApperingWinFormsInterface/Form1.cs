@@ -17,6 +17,7 @@ using System.IO;
 using System.Net;
 using System.Drawing.Printing;
 
+
 namespace MagicTheApperingWinFormsInterface
 {
     public partial class Form1 : Form
@@ -29,34 +30,61 @@ namespace MagicTheApperingWinFormsInterface
         int pages = 0;
         int countInList = 0;
         int landCounter = 0;
+        int cardsAllowedInDeck = 4;
         bool printHalfWay = false;
 
         public Form1()
         {
             InitializeComponent();
-            cardJsonDatabase = CreateJObject("AllSets-x.json");
             
-            if (File.Exists("CardDictionary.dat"))
+            //Try and begin the application.  Make sure that the json file and the card dictionary exists. If it does not, fix that.
+            try
             {
-                cardOutLineDatabase = ReadDataForOutline();
+                if (File.Exists("AllSets-x.json"))
+                {
+                    cardJsonDatabase = CreateJObject("AllSets-x.json");
+                }
+                else
+                {
+
+                    using (WebClient Client = new WebClient())
+                    {
+
+                        Client.DownloadFile("http://mtgjson.com/json/AllSets-x.json", "AllSets-x.json");
+                    }
+                    cardJsonDatabase = CreateJObject("AllSets-x.json");
+
+                }
+
+                if (File.Exists("CardDictionary.dat"))
+                {
+                    cardOutLineDatabase = ReadDataForOutline();
+                }
+                else
+                {
+                    CreateDictionaryAndFile("CardDictionary.dat", cardJsonDatabase);
+                    cardOutLineDatabase = ReadDataForOutline();
+                }
+                Deck = new Dictionary<string, CardOutline>();
+
+                this.CardList.MouseDoubleClick += new MouseEventHandler(CardList_MouseDoubleClick);
+
+                ImagesToPrint = new List<List<Image>>();
             }
-            else
+            catch (Exception e)
             {
-                CreateDictionaryAndFile("CardDictionary.dat", cardJsonDatabase);
-                cardOutLineDatabase = ReadDataForOutline();
+                //Inform the user that they need to connect to the internet to get the json file
+                MessageBox.Show("Please connect to the internet so that you can download the card database. After that the internet will no longer be needed.");
+                this.Close();
             }
-            Deck = new Dictionary<string, CardOutline>();
-
-            this.CardList.MouseDoubleClick += new MouseEventHandler(CardList_MouseDoubleClick);
-
-            ImagesToPrint = new List<List<Image>>();
-            
-            
-
         }
 
 
-
+        /// <summary>
+        /// Creates a JObject using the json file needed to creat the card database.  
+        /// </summary>
+        /// <param name="pathToJson">The path to the json file</param>
+        /// <returns>The JObject used to create the card dictionary, and is also used to get detailed information from the cards</returns>
         public JObject CreateJObject(string pathToJson)
         {
             Console.WriteLine("Beggining read of Json file...");
@@ -72,10 +100,15 @@ namespace MagicTheApperingWinFormsInterface
             return o1;
         }
 
+        /// <summary>
+        /// This function creates the .dat file where the card basics are stored.  That is, the Name of the card, the set that it belongs to, and the number that it is in that set.
+        /// It adds all of the cards to a dictionary first, and then writes all of those cards to the .dat file.
+        /// </summary>
+        /// <param name="fileDestination">The name of the file you want to create, and the path</param>
+        /// <param name="o1">The JObject used to create the cards(the JSON file JObject)</param>
         public void CreateDictionaryAndFile(string fileDestination, JObject o1)
         {
-            Dictionary<string, CardOutline> cardOutlineDictionary = new Dictionary<string,CardOutline>();
-            // JObject o2 = (JObject)JToken.ReadFrom(jsReader);
+            Dictionary<string, CardOutline> cardOutlineDictionary = new Dictionary<string,CardOutline>();            
             int cardsAdded = 0;
 
             Console.WriteLine("Creating objects and populating Dictionary...");
@@ -87,13 +120,11 @@ namespace MagicTheApperingWinFormsInterface
 
                 i = 0;
                 Console.WriteLine(setName.Key);
-                int tries = 0;
                 while (true)
                 {
                     try
                     {
-
-                        //Card tempCard = new Card();
+                        
                         CardOutline tempCardOutline = new CardOutline();
                         tempCardOutline.set = setName.Key;
                         tempCardOutline.numberInSet = i;
@@ -108,8 +139,6 @@ namespace MagicTheApperingWinFormsInterface
                         {
                             Console.WriteLine("Failed at card#: " + i);
                         }
-                        // ca.Add(tempCard.name.ToLower(), tempCard);
-                        //Console.WriteLine("Added Card: " + tempCard.name);
                         cardsAdded++;
                         i++;
                     }
@@ -123,17 +152,13 @@ namespace MagicTheApperingWinFormsInterface
 
 
                 }
-                //break;
+                
 
             }
             Console.WriteLine("Done creating dictionary... Writing to dat file...");
-            //var bFormatter = new BinaryFormatter();
-
             FileStream fStream = File.Create(fileDestination);
-            //bFormatter.Serialize(fStream, cardDictionary);
             StreamWriter writer = new StreamWriter(fStream);
             writer.Write(cardOutlineDictionary.Count + "\n");
-
             foreach (var card in cardOutlineDictionary)
             {
                 writer.Write(card.Key + "\n");
@@ -144,6 +169,13 @@ namespace MagicTheApperingWinFormsInterface
         
         }
 
+        /// <summary>
+        /// Returns a complete card given the outline of any card.  
+        /// </summary>
+        /// <param name="cardOutlineDictionary">The dictionary of card outlines to use</param>
+        /// <param name="tempString">The name of the card for which you want to create a detailed card for</param>
+        /// <param name="o1">The json file to get information from</param>
+        /// <returns>A detailed card of the given name</returns>
         public Card ReadCard(Dictionary<string, CardOutline> cardOutlineDictionary, string tempString, JObject o1)
         {
 
@@ -276,6 +308,10 @@ namespace MagicTheApperingWinFormsInterface
             #endregion
             return tempCard;
         }
+        /// <summary>
+        /// This function reads the CardDictionary.dat file to create a the card dictionary for the program to use.
+        /// </summary>
+        /// <returns>A card Outline dictionary that has all of the cards in it</returns>
         public Dictionary<string, CardOutline> ReadDataForOutline()
         {
             Dictionary<string, CardOutline> cardOutlineDictionary = new Dictionary<string, CardOutline>();
@@ -296,37 +332,49 @@ namespace MagicTheApperingWinFormsInterface
             return cardOutlineDictionary;
         }
 
+        /// <summary>
+        /// Handles the searching given all the paramaters in the series of text boxes in the magic the appering form.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void SearchButton_Click(object sender, EventArgs e)
         {
-           // StatusLabel.Text = "Starting search...";
+            //Set the remove card button to false because it can not be used on the search list
             RemoveButton.Visible = false;
-            CardList.Items.Clear();
-            //RulesBox
+            CardList.Items.Clear();      
+
+            //Create a dictionary of cards that return from searching through it using the rules text box.
             string rulesSearch = RulesBox.Text;
             Dictionary<string, CardOutline> rulesSearchDictionary = new Dictionary<string, CardOutline>();
+            //Make sure the rules search field is not empty
             if (rulesSearch != "")
             {
+                //Split the search results by the commas
                 if (rulesSearch.Contains(',') == true)
                 {
                     string[] searchElements = rulesSearch.Split(',');
+                    //Iterate through the dictionary
                     foreach (var key in cardOutLineDatabase)
                     {
-                        //string name = key.Key;
-                        //tempCard.rulesText = (string)o1[cardOutlineDictionary[tempString].set]["cards"][i]["text"];
                         string tString = key.Key;
+                        //Get the rules from the current card
                         string tempRules = (string)cardJsonDatabase[cardOutLineDatabase[tString].set]["cards"][cardOutLineDatabase[tString].numberInSet]["text"];
                         if (tempRules != null)
                         {
+                            //Get rid of the capitals to make comparing easier
                             tempRules = tempRules.ToLower();
                             for (int i = 0; i < searchElements.Length; i++)
                             {
+                                //Finally check to see if any of the searched elements match inside the rules text of the current card
                                 if (tempRules.Contains(searchElements[i]))
                                 {
                                     if(rulesSearchDictionary.ContainsKey(key.Key) == false && i == 0)
                                     {
+                                        //If it does, add it
                                         rulesSearchDictionary.Add(key.Key, cardOutLineDatabase[key.Key]);
                                     }
                                 }
+                                //If it does not contain every element, then remove the card from the results. We only want to return results with all of the matches
                                 if (tempRules.Contains(searchElements[i]) == false && rulesSearchDictionary.ContainsKey(key.Key))
                                 {
                                     rulesSearchDictionary.Remove(key.Key);
@@ -338,11 +386,9 @@ namespace MagicTheApperingWinFormsInterface
                 }
                 else
                 {
-                    
+                    //If it does not have commas, simply add every card that matches the rules text string
                     foreach (var key in cardOutLineDatabase)
                     {
-                        //string name = key.Key;
-                        //tempCard.rulesText = (string)o1[cardOutlineDictionary[tempString].set]["cards"][i]["text"];
                         string tString = key.Key;
                         string tempRules = (string)cardJsonDatabase[cardOutLineDatabase[tString].set]["cards"][cardOutLineDatabase[tString].numberInSet]["text"];
                         if (tempRules != null)
@@ -358,7 +404,7 @@ namespace MagicTheApperingWinFormsInterface
                 }
 
             }
-                                
+            //Do the same thing for each of the following text fields                                
             string cmcSearch = ConvertedManaCostBox.Text;
             Dictionary<string, CardOutline> cmcSearchDictionary = new Dictionary<string, CardOutline>();
             if (cmcSearch != "")
@@ -400,8 +446,6 @@ namespace MagicTheApperingWinFormsInterface
                         int cmcNumber = System.Convert.ToInt32(cmcSearch);
                         foreach (var key in cardOutLineDatabase)
                         {
-                            //string name = key.Key;
-                            //tempCard.rulesText = (string)o1[cardOutlineDictionary[tempString].set]["cards"][i]["text"];
                             string tString = key.Key;
                             int tempCMC = 1000;
                             if (cardJsonDatabase[cardOutLineDatabase[tString].set]["cards"][cardOutLineDatabase[tString].numberInSet]["cmc"] != null)
@@ -433,10 +477,7 @@ namespace MagicTheApperingWinFormsInterface
                 
                 foreach (var key in cardOutLineDatabase)
                 {
-                    //string name = key.Key;
-                    //tempCard.rulesText = (string)o1[cardOutlineDictionary[tempString].set]["cards"][i]["text"];
-                    string tString = key.Key;
-                    //string tempString = "";
+                    string tString = key.Key;                    
                     JToken colors;
                     string[] tempArray;
                     string[] searchArray;
@@ -489,10 +530,7 @@ namespace MagicTheApperingWinFormsInterface
                 
                 foreach (var key in cardOutLineDatabase)
                 {
-                    //string name = key.Key;
-                    //tempCard.rulesText = (string)o1[cardOutlineDictionary[tempString].set]["cards"][i]["text"];
-                    string tString = key.Key;
-                    //string tempString = "";
+                    string tString = key.Key;                    
                     JToken types;
                     string typesInItem = "";
                     string[] tempArray;
@@ -525,7 +563,6 @@ namespace MagicTheApperingWinFormsInterface
                                     }
                                 }
                             }
-                            //matches == searchArray.Length && tempArray.Length - 1 == searchArray.Length)
                             if (matches == typeFieldArray.Length )
                             {
                                 typeSearchDictionary.Add(key.Key, cardOutLineDatabase[key.Key]);
@@ -543,10 +580,7 @@ namespace MagicTheApperingWinFormsInterface
 
                 foreach (var key in cardOutLineDatabase)
                 {
-                    //string name = key.Key;
-                    //tempCard.rulesText = (string)o1[cardOutlineDictionary[tempString].set]["cards"][i]["text"];
-                    string tString = key.Key;
-                    //string tempString = "";
+                    string tString = key.Key;                 
                     JToken types;
                     string typesInItem = "";
                     string[] tempArray;
@@ -565,10 +599,6 @@ namespace MagicTheApperingWinFormsInterface
                             tempArray = typesInItem.Split(',');
                             typeFieldArray = superTypeSearch.Split(',');
                             int matches = 0;
-                            if (tempArray.Length > 1)
-                            {
-                                int i = 0;
-                            }
                             for (int x = 0; x < tempArray.Length; x++)
                             {
                                 for (int y = 0; y < typeFieldArray.Length; y++)
@@ -578,8 +608,7 @@ namespace MagicTheApperingWinFormsInterface
                                         matches++;
                                     }
                                 }
-                            }
-                            //matches == searchArray.Length && tempArray.Length - 1 == searchArray.Length)
+                            }                           
                             if (matches == typeFieldArray.Length)
                             {
                                 superTypeSearchDictionary.Add(key.Key, cardOutLineDatabase[key.Key]);
@@ -597,18 +626,11 @@ namespace MagicTheApperingWinFormsInterface
 
                 foreach (var key in cardOutLineDatabase)
                 {
-                    //string name = key.Key;
-                    //tempCard.rulesText = (string)o1[cardOutlineDictionary[tempString].set]["cards"][i]["text"];
                     string tString = key.Key;
-                    //string tempString = "";
-                    
                     string nameInItem = "";
                     if (cardJsonDatabase[cardOutLineDatabase[tString].set]["cards"][cardOutLineDatabase[tString].numberInSet]["name"] != null)
                     {
-
-                        nameInItem = (string)cardJsonDatabase[cardOutLineDatabase[tString].set]["cards"][cardOutLineDatabase[tString].numberInSet]["name"];
-                        
-                            
+                        nameInItem = (string)cardJsonDatabase[cardOutLineDatabase[tString].set]["cards"][cardOutLineDatabase[tString].numberInSet]["name"];                                                    
                     }
 
 
@@ -616,156 +638,156 @@ namespace MagicTheApperingWinFormsInterface
                     {
                         nameSearchDictionary.Add(key.Key, cardOutLineDatabase[key.Key]);
                     }
-
-
                 }
             }
-                
 
-                Dictionary<string, CardOutline> firstCompareDictionary = new Dictionary<string, CardOutline>();
-
-                if (rulesSearchDictionary.Count > 0)
+            //Compare all of the search results against each other so that we only have the union of the results remaining.
+            Dictionary<string, CardOutline> firstCompareDictionary = new Dictionary<string, CardOutline>();
+            if (rulesSearchDictionary.Count > 0)
+            {
+                if (cmcSearchDictionary.Count > 0)
                 {
-                    if (cmcSearchDictionary.Count > 0)
+                    foreach (var key1 in rulesSearchDictionary)
                     {
-                        foreach (var key1 in rulesSearchDictionary)
+                        if (cmcSearchDictionary.ContainsKey(key1.Key))
                         {
-                            if (cmcSearchDictionary.ContainsKey(key1.Key))
-                            {
-                                firstCompareDictionary.Add(key1.Key, rulesSearchDictionary[key1.Key]);
-                            }
+                            firstCompareDictionary.Add(key1.Key, rulesSearchDictionary[key1.Key]);
                         }
                     }
+                }
+                else
+                {
+                    firstCompareDictionary = rulesSearchDictionary;
+                }
+            }
+            else
+            {
+                if (cmcSearchDictionary.Count > 0)
+                {
+                    firstCompareDictionary = cmcSearchDictionary;
+                }
+                else
+                {
+                    if (colorSearchDictionary.Count > 0)
+                        firstCompareDictionary = colorSearchDictionary;
+                    else if (typeSearchDictionary.Count > 0)
+                        firstCompareDictionary = typeSearchDictionary;
+                    else if (nameSearchDictionary.Count > 0)
+                        firstCompareDictionary = nameSearchDictionary;
                     else
+                        firstCompareDictionary = superTypeSearchDictionary;
+                }
+            }
+            Dictionary<string, CardOutline> secondCompareDictionary = new Dictionary<string, CardOutline>();
+            if (colorSearchDictionary.Count > 0)
+            {
+                foreach (var key3 in colorSearchDictionary)
+                {
+                    if (firstCompareDictionary.ContainsKey(key3.Key))
                     {
-                        firstCompareDictionary = rulesSearchDictionary;
+                        secondCompareDictionary.Add(key3.Key, colorSearchDictionary[key3.Key]);
                     }
                 }
-                else
-                {
-                    if (cmcSearchDictionary.Count > 0)
-                    {
-                        firstCompareDictionary = cmcSearchDictionary;
-                    }
-                    else
-                    {
-                        if (colorSearchDictionary.Count > 0)
-                            firstCompareDictionary = colorSearchDictionary;
-                        else if (typeSearchDictionary.Count > 0)
-                            firstCompareDictionary = typeSearchDictionary;
-                        else if (nameSearchDictionary.Count > 0)
-                            firstCompareDictionary = nameSearchDictionary;
-                        else
-                            firstCompareDictionary = superTypeSearchDictionary;
-                    }
-                }
-                Dictionary<string, CardOutline> secondCompareDictionary = new Dictionary<string, CardOutline>();
-                if (colorSearchDictionary.Count > 0)
-                {
-                    foreach (var key3 in colorSearchDictionary)
-                    {
-                        if (firstCompareDictionary.ContainsKey(key3.Key))
-                        {
-                            secondCompareDictionary.Add(key3.Key, colorSearchDictionary[key3.Key]);
-                        }
-                    }
-                }
-                else
-                {
-                    secondCompareDictionary = firstCompareDictionary;
-                }
-                Dictionary<string, CardOutline> thirdCompareDictionary = new Dictionary<string, CardOutline>();
-                if (typeSearchDictionary.Count > 0)
-                {
-                    
-                    foreach (var key3 in typeSearchDictionary)
-                    {
-                        if (secondCompareDictionary.ContainsKey(key3.Key))
-                        {
-                            thirdCompareDictionary.Add(key3.Key, typeSearchDictionary[key3.Key]);
-                        }
-                    }
-                }
-                else
-                {
-                    thirdCompareDictionary = secondCompareDictionary;
-                }
-                Dictionary<string, CardOutline> fourthCompareDictionary = new Dictionary<string, CardOutline>();
-                if (nameSearchDictionary.Count > 0)
-                {
+            }
+            else
+            {
+                secondCompareDictionary = firstCompareDictionary;
+            }
+            Dictionary<string, CardOutline> thirdCompareDictionary = new Dictionary<string, CardOutline>();
+            if (typeSearchDictionary.Count > 0)
+            {
 
-                    foreach (var key3 in nameSearchDictionary)
+                foreach (var key3 in typeSearchDictionary)
+                {
+                    if (secondCompareDictionary.ContainsKey(key3.Key))
                     {
-                        if (thirdCompareDictionary.ContainsKey(key3.Key))
-                        {
-                            fourthCompareDictionary.Add(key3.Key, nameSearchDictionary[key3.Key]);
-                        }
+                        thirdCompareDictionary.Add(key3.Key, typeSearchDictionary[key3.Key]);
                     }
                 }
-                else
-                {
-                    fourthCompareDictionary = thirdCompareDictionary;
-                }
-                Dictionary<string, CardOutline> fifthCompareDictionary = new Dictionary<string, CardOutline>();
-                if (superTypeSearchDictionary.Count > 0)
-                {
+            }
+            else
+            {
+                thirdCompareDictionary = secondCompareDictionary;
+            }
+            Dictionary<string, CardOutline> fourthCompareDictionary = new Dictionary<string, CardOutline>();
+            if (nameSearchDictionary.Count > 0)
+            {
 
-                    foreach (var key3 in superTypeSearchDictionary)
+                foreach (var key3 in nameSearchDictionary)
+                {
+                    if (thirdCompareDictionary.ContainsKey(key3.Key))
                     {
-                        if (fourthCompareDictionary.ContainsKey(key3.Key))
-                        {
-                            fifthCompareDictionary.Add(key3.Key, superTypeSearchDictionary[key3.Key]);
-                        }
+                        fourthCompareDictionary.Add(key3.Key, nameSearchDictionary[key3.Key]);
                     }
                 }
-                else
+            }
+            else
+            {
+                fourthCompareDictionary = thirdCompareDictionary;
+            }
+            Dictionary<string, CardOutline> fifthCompareDictionary = new Dictionary<string, CardOutline>();
+            if (superTypeSearchDictionary.Count > 0)
+            {
+
+                foreach (var key3 in superTypeSearchDictionary)
                 {
-                    fifthCompareDictionary = fourthCompareDictionary;
-                }
-                if (fifthCompareDictionary.Count > 0)
-                {
-                    countInList = 0;
-                    searchCacheDatabase = fifthCompareDictionary;
-                    foreach (var key in fifthCompareDictionary)
+                    if (fourthCompareDictionary.ContainsKey(key3.Key))
                     {
-                        CardList.Items.Add(key);
-                        countInList++;
-                        CountLabel.Text = "Cards in list: " + countInList;
+                        fifthCompareDictionary.Add(key3.Key, superTypeSearchDictionary[key3.Key]);
                     }
-                }   
-                else
+                }
+            }
+            else
+            {
+                fifthCompareDictionary = fourthCompareDictionary;
+            }
+            //Finally, add the search results to the list so that the user can view the search results.
+            if (fifthCompareDictionary.Count > 0)
+            {
+                countInList = 0;
+                searchCacheDatabase = fifthCompareDictionary;
+                foreach (var key in fifthCompareDictionary)
                 {
-                    countInList = 0;
-                    searchCacheDatabase = new Dictionary<string, CardOutline>();
-                    CardList.Items.Add("Search returned no results...");
+                    CardList.Items.Add(key);
+                    countInList++;
                     CountLabel.Text = "Cards in list: " + countInList;
                 }
+            }
+            else
+            {
+                countInList = 0;
+                searchCacheDatabase = new Dictionary<string, CardOutline>();
+                CardList.Items.Add("Search returned no results...");
+                CountLabel.Text = "Cards in list: " + countInList;
+            }
 
-                ListStatusLabel.Text = "Search List: ";
-                StatusLabel.Text ="Search Finished...";
+            ListStatusLabel.Text = "Search List: ";
+            StatusLabel.Text = "Search Finished...";
                 
 
             
         }
-
+        /// <summary>
+        /// If the index of the card list is changed, have the picture box(internet connection) or the info text(no internet) change 
+        /// to match the new card that has been selected.  Also, add the new card selected to the recent search list.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void CardList_SelectedIndexChanged(object sender, EventArgs e)
         {
             if(CardList.SelectedItems.Count > 0)
             RecentSelectionBox.ClearSelected();
             int CardListSelectedIndex = CardList.SelectedIndex;
-            //searchCacheDatabase.ElementAt(CardListSelectedIndex)
-            
+
             try
             {
                 if (RemoveButton.Visible == false)
                 {
-                Card tempCard = ReadCard(cardOutLineDatabase, searchCacheDatabase.ElementAt(CardListSelectedIndex).Key, cardJsonDatabase);
+                    Card tempCard = ReadCard(cardOutLineDatabase, searchCacheDatabase.ElementAt(CardListSelectedIndex).Key, cardJsonDatabase);
 
 
-                InfoLabel.Text = tempCard.ToString();
-                string url = "";
-                
-                    //cardJsonDatabase[cardOutLineDatabase[tString].set]["cards"][cardOutLineDatabase[tString].numberInSet]["subtypes"] 
+                    InfoLabel.Text = tempCard.ToString();
+                    string url = "";
                     url = String.Format("http://gatherer.wizards.com/Handlers/Image.ashx?multiverseid={0}&type=card", cardJsonDatabase[searchCacheDatabase.ElementAt(CardListSelectedIndex).Value.set]["cards"][searchCacheDatabase.ElementAt(CardListSelectedIndex).Value.numberInSet]["multiverseid"]);
                     bool canConnect = CheckForInternetConnection();
                     if (canConnect == true)
@@ -776,8 +798,7 @@ namespace MagicTheApperingWinFormsInterface
                         InfoLabel.Visible = false;
                         Image toSet = new System.Drawing.Bitmap(new MemoryStream(new WebClient().DownloadData(url)));
                         CardImageBox.Image = toSet;
-                        RecentSelectionBox.Items.Insert(0,tempCard.name);
-                        
+                        RecentSelectionBox.Items.Insert(0, tempCard.name);
 
                         if (Deck.ContainsKey(tempCard.name.ToLower()))
                         {
@@ -787,8 +808,6 @@ namespace MagicTheApperingWinFormsInterface
                         {
                             StatusLabel.Text = "Card not currently in deck.";
                         }
-
-
 
                     }
                     else
@@ -815,9 +834,6 @@ namespace MagicTheApperingWinFormsInterface
                         InfoLabel.Visible = false;
                         Image toSet = new System.Drawing.Bitmap(new MemoryStream(new WebClient().DownloadData(url)));
                         CardImageBox.Image = toSet;
-
-
-
                     }
                     else
                     {
@@ -833,6 +849,11 @@ namespace MagicTheApperingWinFormsInterface
             }
         }
 
+        /// <summary>
+        /// Add the currently selected card to the deck.  This will work if a card is selected in either the search list, or the recent list
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void AddToDeckButton_Click(object sender, EventArgs e)
         {
             if (CardList.SelectedItems.Count == 1)
@@ -983,6 +1004,11 @@ namespace MagicTheApperingWinFormsInterface
             }
         }
 
+        /// <summary>
+        /// Clear the search list and show the deck dictionary to display the deck that the user has created, or loaded to view
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void ShowDeckButton_Click(object sender, EventArgs e)
         {
 
@@ -999,6 +1025,10 @@ namespace MagicTheApperingWinFormsInterface
             CountLabel.Text = "Cards in Deck: " + countInList;
         }
 
+        /// <summary>
+        /// A simple function used to check to see if there is an internet connection
+        /// </summary>
+        /// <returns>true if there is an internet connection, false if there is not</returns>
         public static bool CheckForInternetConnection()
         {
             try
@@ -1015,17 +1045,25 @@ namespace MagicTheApperingWinFormsInterface
             }
         }
 
+        /// <summary>
+        /// Clear all of the text fields for the ease of the user.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void ClearButton_Click(object sender, EventArgs e)
         {
             RulesBox.Text = "";
             ConvertedManaCostBox.Text = "";
             NameTextBox.Text = "";
             ColorBox.Text = "";
-            TypeBox.Text = "";
-
-            
+            TypeBox.Text = "";    
         }
 
+        /// <summary>
+        /// Remove the currently selected card from the deck.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void RemoveButton_Click(object sender, EventArgs e)
         {
 
@@ -1067,11 +1105,15 @@ namespace MagicTheApperingWinFormsInterface
 
 
         }
+
+        /// <summary>
+        /// Save the current deck to a file at the given destination
+        /// </summary>
+        /// <param name="pathToDestination"></param>
         public void WriteDeckToFile(string pathToDestination)
         {
             pathToDestination += ".dat";
-            FileStream fStream = File.Create(pathToDestination);
-            //bFormatter.Serialize(fStream, cardDictionary);
+            FileStream fStream = File.Create(pathToDestination);           
             StreamWriter writer = new StreamWriter(fStream);
             writer.Write(Deck.Count + "\n");
 
@@ -1082,10 +1124,13 @@ namespace MagicTheApperingWinFormsInterface
             }
             writer.Flush();
             fStream.Close();              
-        
-
         }
 
+        /// <summary>
+        /// Opens the save file dialouge and calls the save deck function to save the deck.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void saveDeckToolStripMenuItem_Click(object sender, EventArgs e)
         {
             saveFileDialog1.Title = "Save your deck";
@@ -1098,6 +1143,11 @@ namespace MagicTheApperingWinFormsInterface
             
         }
 
+        /// <summary>
+        /// Read a deck given a specific file.
+        /// </summary>
+        /// <param name="fileToOpen"></param>
+        /// <returns></returns>
         public Dictionary<string, CardOutline> ReadDeckFromFile(string fileToOpen)
         {
             Dictionary<string, CardOutline> loadDeckDictionary = new Dictionary<string, CardOutline>();
@@ -1120,6 +1170,11 @@ namespace MagicTheApperingWinFormsInterface
             return loadDeckDictionary;
         }
 
+        /// <summary>
+        /// Open the load file dialouge and call the read deck function to get the deck information from it.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void loadDeckToolStripMenuItem_Click(object sender, EventArgs e)
         {
             OpenFileDialog.Title = "Choose a deck to open";
@@ -1142,6 +1197,11 @@ namespace MagicTheApperingWinFormsInterface
             CountLabel.Text = "Cards in Deck: " + countInList;
         }
 
+        /// <summary>
+        /// Clears the deck list and returns the count in the deck to zero
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void newDeckToolStripMenuItem_Click(object sender, EventArgs e)
         {
             Deck = new Dictionary<string, CardOutline>();
@@ -1154,7 +1214,9 @@ namespace MagicTheApperingWinFormsInterface
             
         }
 
-
+        /// <summary>
+        /// Print the deck to a print document
+        /// </summary>
         public void PrintImagesToFile()
         {
             ImagesToPrint = new List<List<Image>>();
@@ -1170,6 +1232,9 @@ namespace MagicTheApperingWinFormsInterface
             
         }
 
+        /// <summary>
+        /// Create the actual print pages that will be used to print by the print document.
+        /// </summary>
         public void CompilePrintList()
         {
 
@@ -1185,7 +1250,6 @@ namespace MagicTheApperingWinFormsInterface
 
                         for (int i = 0; i < Card.Value.count; i++)
                         {
-
                             string url = String.Format("http://gatherer.wizards.com/Handlers/Image.ashx?multiverseid={0}&type=card", cardJsonDatabase[Card.Value.set]["cards"][Card.Value.numberInSet]["multiverseid"]);
                             Image toAdd = new System.Drawing.Bitmap(new MemoryStream(new WebClient().DownloadData(url)));
                             if (nineImages.Count < 9)
@@ -1199,7 +1263,7 @@ namespace MagicTheApperingWinFormsInterface
                                 nineImages.Add(toAdd);
                             }
 
-                            //ImagesToPrint
+                         
                         }
                     }
                     ImagesToPrint.Add(nineImages);
@@ -1215,6 +1279,11 @@ namespace MagicTheApperingWinFormsInterface
             }
         }
 
+        /// <summary>
+        /// Defines the locations for the cards to print at given the ammount of cards that will, or have already been set to a print page.
+        /// </summary>
+        /// <param name="o"></param>
+        /// <param name="e"></param>
         private void PrintPage(Object o, PrintPageEventArgs e)
         {
             //e.Graphics.DrawImage(toSet, loc);
@@ -1273,17 +1342,27 @@ namespace MagicTheApperingWinFormsInterface
             e.HasMorePages = false;
         }
 
+        /// <summary>
+        /// Create the print document and display it.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void createPrintableToolStripMenuItem_Click(object sender, EventArgs e)
         {
             PrintImagesToFile();
         }
 
+        /// <summary>
+        /// When double clicked, add the selected card to the deck list.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         void CardList_MouseDoubleClick(object sender, MouseEventArgs e)
         {
             int index = this.CardList.IndexFromPoint(e.Location);
             if (index != System.Windows.Forms.ListBox.NoMatches)
             {
-                //do your stuff here
+                
                 int CardListSelectedIndex = CardList.SelectedIndex;
                 string nameKey = "";
                 try
@@ -1361,6 +1440,11 @@ namespace MagicTheApperingWinFormsInterface
             
         }
 
+        /// <summary>
+        /// When an item is selected in the recent selection box, clear the current image and display the new card. Also, deselect the card list box
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void RecentSelectionBox_SelectedIndexChanged(object sender, EventArgs e)
         {
             if(RecentSelectionBox.SelectedItems.Count > 0)
@@ -1413,87 +1497,38 @@ namespace MagicTheApperingWinFormsInterface
 
             }
 
-            /*
-              int CardListSelectedIndex = CardList.SelectedIndex;
-            //searchCacheDatabase.ElementAt(CardListSelectedIndex)
-            
+        }
+
+        private void updateCardsDatabaseToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            //Update the card database to the most current form
             try
             {
-                if (RemoveButton.Visible == false)
+
+                //Create a web client to download the file
+                using (WebClient Client = new WebClient())
                 {
-                Card tempCard = ReadCard(cardOutLineDatabase, searchCacheDatabase.ElementAt(CardListSelectedIndex).Key, cardJsonDatabase);
-
-
-                InfoLabel.Text = tempCard.ToString();
-                string url = "";
-                
-                    //cardJsonDatabase[cardOutLineDatabase[tString].set]["cards"][cardOutLineDatabase[tString].numberInSet]["subtypes"] 
-                    url = String.Format("http://gatherer.wizards.com/Handlers/Image.ashx?multiverseid={0}&type=card", cardJsonDatabase[searchCacheDatabase.ElementAt(CardListSelectedIndex).Value.set]["cards"][searchCacheDatabase.ElementAt(CardListSelectedIndex).Value.numberInSet]["multiverseid"]);
-                    bool canConnect = CheckForInternetConnection();
-                    if (canConnect == true)
-                    {
-                        CardImageBox.Visible = true;
-                        RulesAloneLabel.Visible = true;
-                        RulesAloneLabel.Text = (string)cardJsonDatabase[searchCacheDatabase.ElementAt(CardListSelectedIndex).Value.set]["cards"][searchCacheDatabase.ElementAt(CardListSelectedIndex).Value.numberInSet]["text"];
-                        InfoLabel.Visible = false;
-                        Image toSet = new System.Drawing.Bitmap(new MemoryStream(new WebClient().DownloadData(url)));
-                        CardImageBox.Image = toSet;
-                        RecentSelectionBox.Items.Insert(0,tempCard.name);
-                        
-
-                        if (Deck.ContainsKey(tempCard.name.ToLower()))
-                        {
-                            StatusLabel.Text = Deck[tempCard.name.ToLower()].count + " currently in deck.";
-                        }
-                        else
-                        {
-                            StatusLabel.Text = "Card not currently in deck.";
-                        }
-
-
-
-                    }
-                    else
-                    {
-                        RulesAloneLabel.Visible = false;
-                        InfoLabel.Visible = true;
-                        CardImageBox.Visible = false;
-                    }
+                    //Download and overwrite the the current json file
+                    Client.DownloadFileAsync(new Uri("http://mtgjson.com/json/AllSets-x.json"), "AllSets-x2.json");
                 }
-                else if (RemoveButton.Visible == true)
-                {
-                    Card tempCard = ReadCard(cardOutLineDatabase, Deck.ElementAt(CardListSelectedIndex).Key, cardJsonDatabase);
+                cardJsonDatabase = CreateJObject("AllSets-x.json");
 
+                MessageBox.Show("The Card Dictionary will now be updated, please click Okay to continue.");
 
-                    InfoLabel.Text = tempCard.ToString();
-                    string url = "";
-                    url = String.Format("http://gatherer.wizards.com/Handlers/Image.ashx?multiverseid={0}&type=card", cardJsonDatabase[Deck.ElementAt(CardListSelectedIndex).Value.set]["cards"][Deck.ElementAt(CardListSelectedIndex).Value.numberInSet]["multiverseid"]);
-                    bool canConnect = CheckForInternetConnection();
-                    if (canConnect == true)
-                    {
-                        CardImageBox.Visible = true;
-                        RulesAloneLabel.Visible = true;
-                        RulesAloneLabel.Text = (string)cardJsonDatabase[Deck.ElementAt(CardListSelectedIndex).Value.set]["cards"][Deck.ElementAt(CardListSelectedIndex).Value.numberInSet]["text"];
-                        InfoLabel.Visible = false;
-                        Image toSet = new System.Drawing.Bitmap(new MemoryStream(new WebClient().DownloadData(url)));
-                        CardImageBox.Image = toSet;
-
-
-
-                    }
-                    else
-                    {
-                        RulesAloneLabel.Visible = false;
-                        InfoLabel.Visible = true;
-                        CardImageBox.Visible = false;
-                    }
-                }
+                //Create a new dat file and read it in for the new card database
+                CreateDictionaryAndFile("CardDictionary.dat", cardJsonDatabase);
+                cardOutLineDatabase = ReadDataForOutline();
+                MessageBox.Show("Finished! Click Okay to continue.");
+             
+             
             }
-            catch (Exception e4)
+            catch (Exception e6)
             {
-                Console.WriteLine(e4.Message);
+                //Tell the user to connect to the internet so that they can get the new json file.
+                Console.WriteLine(e6.Message);
+                MessageBox.Show("Please connect to the internet so that you can download the card database. After that the internet will no longer be needed.");
+                this.Close();
             }
-             */
         }
         
     }

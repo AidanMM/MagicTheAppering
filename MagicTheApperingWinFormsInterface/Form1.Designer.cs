@@ -64,6 +64,8 @@
             this.ListStatusLabel = new System.Windows.Forms.Label();
             this.SuperTypeLabel = new System.Windows.Forms.Label();
             this.SuperTypeTextBox = new System.Windows.Forms.TextBox();
+            this.SettingButton = new System.Windows.Forms.ToolStripDropDownButton();
+            this.updateCardsDatabaseToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             ((System.ComponentModel.ISupportInitialize)(this.CardImageBox)).BeginInit();
             this.toolStrip1.SuspendLayout();
             this.SuspendLayout();
@@ -262,7 +264,8 @@
             // toolStrip1
             // 
             this.toolStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.FileToolStripButton});
+            this.FileToolStripButton,
+            this.SettingButton});
             this.toolStrip1.Location = new System.Drawing.Point(0, 0);
             this.toolStrip1.Name = "toolStrip1";
             this.toolStrip1.Size = new System.Drawing.Size(1048, 27);
@@ -368,6 +371,24 @@
             this.SuperTypeTextBox.Size = new System.Drawing.Size(100, 22);
             this.SuperTypeTextBox.TabIndex = 28;
             // 
+            // SettingButton
+            // 
+            this.SettingButton.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
+            this.SettingButton.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.updateCardsDatabaseToolStripMenuItem});
+            this.SettingButton.Image = ((System.Drawing.Image)(resources.GetObject("SettingButton.Image")));
+            this.SettingButton.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.SettingButton.Name = "SettingButton";
+            this.SettingButton.Size = new System.Drawing.Size(75, 24);
+            this.SettingButton.Text = "Settings";
+            // 
+            // updateCardsDatabaseToolStripMenuItem
+            // 
+            this.updateCardsDatabaseToolStripMenuItem.Name = "updateCardsDatabaseToolStripMenuItem";
+            this.updateCardsDatabaseToolStripMenuItem.Size = new System.Drawing.Size(235, 24);
+            this.updateCardsDatabaseToolStripMenuItem.Text = "Update Cards Database";
+            this.updateCardsDatabaseToolStripMenuItem.Click += new System.EventHandler(this.updateCardsDatabaseToolStripMenuItem_Click);
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
@@ -448,6 +469,8 @@
         private System.Windows.Forms.Label ListStatusLabel;
         private System.Windows.Forms.Label SuperTypeLabel;
         private System.Windows.Forms.TextBox SuperTypeTextBox;
+        private System.Windows.Forms.ToolStripDropDownButton SettingButton;
+        private System.Windows.Forms.ToolStripMenuItem updateCardsDatabaseToolStripMenuItem;
     }
 }
 
