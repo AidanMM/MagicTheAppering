@@ -1533,6 +1533,14 @@ namespace MagicTheApperingWinFormsInterface
                 this.Close();
             }
         }
+
+        private void hostGameToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            VersusMode hostGame = new VersusMode(Deck, cardJsonDatabase);
+            hostGame.jsonDatabase = cardJsonDatabase;
+            hostGame.Show();
+            
+        }
         
     }
 }
